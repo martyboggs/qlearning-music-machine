@@ -1,4 +1,5 @@
 *.log
 /node_modules/*
-!/node_modules/tone/build/
+!/node_modules/tone/
+/node_modules/tone/Tone
 !/node_modules/reinforcenode/
