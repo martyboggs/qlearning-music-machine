@@ -1,3 +1,2 @@
 node_modules
-/Tone.js
-!Tone.js/build/Tone.js
+*.log

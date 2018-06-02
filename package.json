@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "jsmidgen": "^0.1.5"
+    "jsmidgen": "^0.1.5",
+    "tone": "^0.12.80"
   }
 }
