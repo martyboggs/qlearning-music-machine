@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "jsmidgen": "^0.1.5",
+    "reinforcenode": "^1.0.1",
     "tone": "^0.12.80"
   }
 }
