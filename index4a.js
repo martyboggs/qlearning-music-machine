@@ -43,29 +43,19 @@ var sampler = new Tone.Sampler(Object.assign(drumSamples, samples), () => {
 	Tone.Transport.start();
 }).toMaster();
 
-
-// init learner
-// var times = [1,2,3,4];
-var learner = new QLearner();
-var exploration = 0.2;
+// init DQN agent
+var env = {};
+env.getNumStates = function () { return 3; }
+env.getMaxNumActions = function () { return melody.length; }
+var spec = { alpha: 0.01 } // see full options on DQN page
+agent = new RL.DQNAgent(env, spec);
 var debug = false;
 var lastNote = 'a5';
 var lastChord = chords[measures];
-var lastState = 'S1' + lastNote + (lastNote.length === 2 ? ' ' : '') + lastChord.join('');
+var lastState = [1, lastNote, lastChord.join('')];
 var thisState;
 
 function step(time) {
-
-	//get some action
-	var randomAction = melody[~~(melody.length * Math.random())];
-	//and the best action
-	var action = learner.bestAction(lastState);
-	//if there is no best action or exploration, try to explore
-	var explore = action===null || action === undefined || (!learner.knowsAction(lastState, randomAction) && Math.random() < exploration);
-	if (explore) {
-		action = randomAction;
-	}
-
 	// chords
 	if (eights % 8 === 0) {
 		thisChord = chords[measures];
@@ -74,13 +64,16 @@ function step(time) {
 		if (measures > chords.length - 1) measures = 0;
 	}
 
+	//get some action
+	var action = agent.act(lastState);
+
 	// get this state attributes
 	var thisStrong = eights % 4 === 0;
 	var modScale = scale.concat(thisChord.map(n => n.slice(0, -1)));
 	modScale = [...new Set(modScale)];
-	var inScale = modScale.indexOf(action.slice(0, -1)) !== -1
+	var inScale = modScale.indexOf(melody[action].slice(0, -1)) !== -1
 	var inChord = thisChord.reduce((a, v) => {
-		return a ? a : action.slice(0, -1) === v.slice(0, -1)
+		return a ? a : melody[action].slice(0, -1) === v.slice(0, -1)
 	}, false);
 
 	// calculate reward based on new state
@@ -92,8 +85,9 @@ function step(time) {
 		reward = 1;
 		if (debug) console.log('in scale');
 	}
-	if (lastNote === action) {
-		reward = 0;
+
+	if (lastNote === melody[action]) {
+		reward = -0.5;
 		if (debug) console.log('same note as last time');
 	}
 
@@ -113,17 +107,14 @@ function step(time) {
 	}, time);
 
 	// LEARN
-	thisState = 'S' + (thisStrong ? 1 : 0) + action + (action.length === 2 ? ' ' : '') + thisChord.join('');
-	learner.add(lastState, thisState, reward, action);
-	learner.learn(10); // 10 iterations
+	thisState = [thisStrong ? 1 : 0, melody[action], thisChord.join('')];
 
+	agent.learn(reward);
 
 
 
 	// melody - play learner's note if not chosen randomly
-	if (!explore) {
-		polySynth2.triggerAttackRelease(action, '16n');
-	}
+	polySynth2.triggerAttackRelease(melody[action], '16n');
 
 
 
@@ -146,7 +137,7 @@ function step(time) {
 
 	if (debug) console.log(lastState, thisState);
 
-	lastNote = action;
+	lastNote = melody[action];
 	lastChord = thisChord;
 	lastState = thisState;
 	eights++;

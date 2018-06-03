@@ -55,6 +55,13 @@ var lastState = 'S1' + lastNote + (lastNote.length === 2 ? ' ' : '') + lastChord
 var thisState;
 
 function step(time) {
+	// chords
+	if (eights % 8 === 0) {
+		thisChord = chords[measures];
+		polySynth.triggerAttackRelease(thisChord, '4n');
+		measures++;
+		if (measures > chords.length - 1) measures = 0;
+	}
 
 	//get some action
 	var randomAction = melody[~~(melody.length * Math.random())];
@@ -64,14 +71,6 @@ function step(time) {
 	var explore = action===null || action === undefined || (!learner.knowsAction(lastState, randomAction) && Math.random() < exploration);
 	if (explore) {
 		action = randomAction;
-	}
-
-	// chords
-	if (eights % 8 === 0) {
-		thisChord = chords[measures];
-		polySynth.triggerAttackRelease(thisChord, '4n');
-		measures++;
-		if (measures > chords.length - 1) measures = 0;
 	}
 
 	// get this state attributes
