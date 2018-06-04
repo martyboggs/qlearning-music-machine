@@ -3,14 +3,13 @@ var polySynth = new Tone.PolySynth(4, Tone.Synth).toMaster();
 var polySynth2 = new Tone.PolySynth(4, Tone.Synth).toMaster();
 var chords = [
 	['d4', 'f#4', 'a4'],
-	['d4', 'f#4', 'a4'],
 	['c#4', 'e4', 'g#4'],
 	['f#3', 'a#3', 'c#4'],
 	['b3', 'd4', 'f#4'],
-	['b3', 'd4', 'f#4'],
-	['a3', 'c#4', 'e4'],
 	['a3', 'c#4', 'e4'],
 ];
+var progression = [0, 0, 1, 2, 3, 3, 4, 4];
+
 var melody = ['e5', 'f5', 'f#5', 'g5', 'g#5', 'a5', 'a#5', 'b5', 'c6', 'c#6', 'd6', 'd#6', 'e6'];
 var scale = ['a', 'b', 'c#', 'd', 'e', 'f#', 'g#'];
 var eights = 0;
@@ -50,18 +49,17 @@ env.getMaxNumActions = function () { return melody.length; }
 var spec = { alpha: 0.01 } // see full options on DQN page
 agent = new RL.DQNAgent(env, spec);
 var debug = false;
-var lastNote = 'a5';
-var lastChord = chords[measures];
-var lastState = [1, lastNote, lastChord.join('')];
+var lastChord = progression[measures];
+var lastState = [1, 5, lastChord];
 var thisState;
 
 function step(time) {
 	// chords
 	if (eights % 8 === 0) {
-		thisChord = chords[measures];
-		polySynth.triggerAttackRelease(thisChord, '4n');
+		thisChord = progression[measures];
+		polySynth.triggerAttackRelease(chords[thisChord], '4n');
 		measures++;
-		if (measures > chords.length - 1) measures = 0;
+		if (measures > progression.length - 1) measures = 0;
 	}
 
 	//get some action
@@ -69,10 +67,10 @@ function step(time) {
 
 	// get this state attributes
 	var thisStrong = eights % 4 === 0;
-	var modScale = scale.concat(thisChord.map(n => n.slice(0, -1)));
+	var modScale = scale.concat(chords[thisChord].map(n => n.slice(0, -1)));
 	modScale = [...new Set(modScale)];
 	var inScale = modScale.indexOf(melody[action].slice(0, -1)) !== -1
-	var inChord = thisChord.reduce((a, v) => {
+	var inChord = chords[thisChord].reduce((a, v) => {
 		return a ? a : melody[action].slice(0, -1) === v.slice(0, -1)
 	}, false);
 
@@ -86,8 +84,8 @@ function step(time) {
 		if (debug) console.log('in scale');
 	}
 
-	if (lastNote === melody[action]) {
-		reward = -0.5;
+	if (melody[lastState[1]] === melody[action]) {
+		reward = 0;
 		if (debug) console.log('same note as last time');
 	}
 
@@ -107,16 +105,11 @@ function step(time) {
 	}, time);
 
 	// LEARN
-	thisState = [thisStrong ? 1 : 0, melody[action], thisChord.join('')];
-
+	thisState = [thisStrong ? 1 : 0, action, thisChord];
 	agent.learn(reward);
 
-
-
-	// melody - play learner's note if not chosen randomly
+	// play melody
 	polySynth2.triggerAttackRelease(melody[action], '16n');
-
-
 
 	// drums
 	if (eights % 4 === 0) {
@@ -137,7 +130,6 @@ function step(time) {
 
 	if (debug) console.log(lastState, thisState);
 
-	lastNote = melody[action];
 	lastChord = thisChord;
 	lastState = thisState;
 	eights++;
@@ -151,4 +143,3 @@ function step(time) {
 		Tone.Transport.start();
 	}, 1000);
 }
-
