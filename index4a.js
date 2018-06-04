@@ -108,8 +108,12 @@ function step(time) {
 	thisState = [thisStrong ? 1 : 0, action, thisChord];
 	agent.learn(reward);
 
+
+
 	// play melody
 	polySynth2.triggerAttackRelease(melody[action], '16n');
+
+
 
 	// drums
 	if (eights % 4 === 0) {
