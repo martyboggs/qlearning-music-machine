@@ -73,20 +73,27 @@ function step(time) {
 	var inChord = chords[thisChord].reduce((a, v) => {
 		return a ? a : melody[action].slice(0, -1) === v.slice(0, -1)
 	}, false);
+	var semitoneDiff = Math.abs(lastState[1] - action);
 
 	// calculate reward based on new state
-	var reward = -1; // if not in scale
+	var reward = 0; // if not in scale
 	if (inChord && thisStrong) {
 		reward = 2;
-		if (debug) console.log('in chord');
 	} else if (inScale) {
 		reward = 1;
-		if (debug) console.log('in scale');
+	} else {
+		reward = -1;
 	}
 
-	if (melody[lastState[1]] === melody[action]) {
-		reward = 0;
-		if (debug) console.log('same note as last time');
+	if (inScale) {
+		if (semitoneDiff === 0) {
+			reward = -1;
+			if (debug) console.log('same note as last time');
+		} else if (semitoneDiff === 1 || semitoneDiff === 2) { // m2 M2
+			reward += 2;
+		} else if (semitoneDiff === 3 || semitoneDiff === 4) { // m3 M3
+			reward += 1;
+		}
 	}
 
 	// update ui
@@ -105,7 +112,6 @@ function step(time) {
 	}, time);
 
 	// LEARN
-	thisState = [thisStrong ? 1 : 0, action, thisChord];
 	agent.learn(reward);
 
 
@@ -132,10 +138,8 @@ function step(time) {
 		}
 	}
 
-	if (debug) console.log(lastState, thisState);
-
+	lastState = [thisStrong ? 1 : 0, action, thisChord];
 	lastChord = thisChord;
-	lastState = thisState;
 	eights++;
 
 	// keep it going
@@ -145,5 +149,5 @@ function step(time) {
 		var loop = new Tone.Loop(step, '8n');
 		loop.start('4n');
 		Tone.Transport.start();
-	}, 1000);
+	}, 500);
 }

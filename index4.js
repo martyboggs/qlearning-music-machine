@@ -81,6 +81,7 @@ function step(time) {
 	var inChord = thisChord.reduce((a, v) => {
 		return a ? a : action.slice(0, -1) === v.slice(0, -1)
 	}, false);
+	var semitoneDiff = Math.abs(melody.indexOf(lastNote) - melody.indexOf(action));
 
 	// calculate reward based on new state
 	var reward = -1; // if not in scale
@@ -91,9 +92,14 @@ function step(time) {
 		reward = 1;
 		if (debug) console.log('in scale');
 	}
-	if (lastNote === action) {
+
+	if (semitoneDiff === 0) {
 		reward = 0;
 		if (debug) console.log('same note as last time');
+	} else if (semitoneDiff === 1 || semitoneDiff === 2) { // m2 M2
+		reward += 2;
+	} else if (semitoneDiff === 3 || semitoneDiff === 4) { // m3 M3
+		reward += 1;
 	}
 
 	// update ui
@@ -157,6 +163,6 @@ function step(time) {
 		var loop = new Tone.Loop(step, '8n');
 		loop.start('4n');
 		Tone.Transport.start();
-	}, 1000);
+	}, 500);
 }
 
