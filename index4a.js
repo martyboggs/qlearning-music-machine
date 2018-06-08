@@ -76,7 +76,7 @@ function step(time) {
 	var semitoneDiff = Math.abs(lastState[1] - action);
 
 	// calculate reward based on new state
-	var reward = 0; // if not in scale
+	var reward = 0;
 	if (inChord && thisStrong) {
 		reward = 2;
 	} else if (inScale) {
