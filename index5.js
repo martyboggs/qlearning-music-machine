@@ -386,10 +386,10 @@ function step(time) {
 	}
 
 	// vocals
-	if ([1 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('e3', '10m', time - 0.05);
-	if ([2 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('f3', '10m', time - 0.05);
-	if ([3 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('f#3', '10m', time - 0.05);
-	if ([4 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('g3', '10m', time - 0.05);
+	if ([4 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('e3', '10m', time - 0.05);
+	if ([6 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('f3', '10m', time - 0.05);
+	if ([8 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('f#3', '10m', time - 0.05);
+	if ([10 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('g3', '10m', time - 0.05);
 	if ([12 * 8 + 2, 36 * 8 + 2].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('d#3', '10m', time - 0.05);
 	if ([20 * 8 - 1, 44 * 8 - 1].indexOf(eights % (progression.length * 8)) !== -1) sampler.triggerAttackRelease('g#3', '10m', time - 0.05);
 
