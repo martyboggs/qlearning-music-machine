@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "dat.gui": "^0.7.2",
     "jsmidgen": "^0.1.5",
     "tone": "^0.12.80"
   }

@@ -1,3 +1,29 @@
+let N = (length, value, octave) => {
+	octave = (value) ? octave || 0 : null;
+	value = value || null;
+	// the step value is used in the canvas drawing
+	// if a rest, pass a string for later detection
+	let step = (value) ? 'C C# D D# E F F# G G# A A# B'.split(' ').indexOf(value) : 'REST';
+	let sustain;
+	// accounting for ties and dotted notes
+	if(typeof length === 'object') {
+	  // turn comma-delimited string into an array
+	  let lengths = Array.from(length);
+	  // creating sustain from array. 2,4 = 12 | 4,8 = 6 | 8,16 = 3
+	  sustain = 0;
+	  lengths.forEach((l) => { sustain += res / l; })
+	  // length uses tone.js `+` notation. 1,1 = '1n+1'. last `n` added in object below.
+	  length = lengths.join('n+');
+	} else {
+	  // how many resolution values this sustains
+	  sustain = res / length;
+	}
+
+	let d = { value: value, step: step, length: `${length}n`, sustain: sustain, octave: octave };
+	d.length = d.length.replace(/1n/g, '1m')
+	return d;
+};
+
 var debug = true;
 
 // init music
@@ -311,6 +337,9 @@ function step(time) {
 		}
 	}
 
+	// LEARN
+	agent.learn(reward);
+
 	// update ui
 	Tone.Draw.schedule(function () {
 		var good = document.querySelector('.good');
@@ -325,10 +354,6 @@ function step(time) {
 		var percent = document.querySelector('.percent');
 		percent.innerHTML = (b / (g !== 0 ? g : 1) * 100).toFixed(2) + '% bad/good';
 	}, time);
-
-	// LEARN
-	agent.learn(reward);
-
 
 
 	// melody

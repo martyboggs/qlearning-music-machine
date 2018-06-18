@@ -1,0 +1,649 @@
+<html>
+	<head>
+		<style>
+			body {
+				font-size: 20px;
+				text-align: center;
+				font-weight: bold;
+				margin: 0;
+			}
+			.percent {
+				margin-bottom: 30px;
+			}
+			button {
+				background: lime;
+				font-size: 18px;
+				padding: 10px 20px;
+				margin: 4px;
+				border: 0;
+				color: white;
+				cursor: pointer;
+				outline: none;
+			}
+			button:hover {
+				background: green;
+			}
+			button:active {
+				background: black;
+			}
+			.pig {
+				transition: transform 0.5s ease-out;
+			}
+			.bounce {
+				transform: translate(0, -30px);
+			}
+
+			/*
+			120bpm
+			2bps
+			1 half note per second
+			*/
+
+		</style>
+		<!-- <script src="node_modules/tone/build/Tone.js"></script> -->
+		<script src="https://unpkg.com/tone@0.12.80/build/Tone.js"></script>
+		<script src="//cdn.jsdelivr.net/npm/phaser@3.9.0/dist/phaser.js"></script>
+		<script src="node_modules/dat.gui/build/dat.gui.min.js"></script>
+		<script src="reinforcejs/lib/rl.js"></script>
+		<script>
+var config = {
+	type: Phaser.AUTO,
+	parent: 'phaser-example',
+	width: 1536,
+	height: 732,
+	backgroundColor: '#fff',
+	scene: {
+		preload: preload,
+		create: create,
+		update: update
+	},
+	pixelArt: true
+};
+
+var game = new Phaser.Game(config);
+
+function preload() {
+	this.load.image('pig', 'dancingpigs/pig.png');
+	this.load.image('frog', 'dancingpigs/frog.png');
+	this.load.image('tugboat', 'dancingpigs/tugboat.png');
+	this.load.image('robot', 'dancingpigs/robot.png');
+	this.load.image('anime', 'dancingpigs/anime.png');
+	this.load.image('girl', 'dancingpigs/girl.gif');
+
+	this.load.audio('drums', ['dancingpigs/drums.ogg', 'dancingpigs/drums.mp3']);
+	this.load.audio('loopNote', 'dancingpigs/e4.mp3');
+	this.load.audio('e4', 'dancingpigs/e4.mp3');
+	this.load.audio('f4', 'dancingpigs/f4.mp3');
+	this.load.audio('f#4', 'dancingpigs/ff4.mp3');
+	this.load.audio('g4', 'dancingpigs/g4.mp3');
+	this.load.audio('g#4', 'dancingpigs/gg4.mp3');
+	this.load.audio('a4', 'dancingpigs/a4.mp3');
+	this.load.audio('a#4', 'dancingpigs/aa4.mp3');
+	this.load.audio('b4', 'dancingpigs/b4.mp3');
+	this.load.audio('c5', 'dancingpigs/c5.mp3');
+	this.load.audio('c#5', 'dancingpigs/cc5.mp3');
+	this.load.audio('d5', 'dancingpigs/d5.mp3');
+	this.load.audio('d#5', 'dancingpigs/dd5.mp3');
+	this.load.audio('e5', 'dancingpigs/e5.mp3');
+
+	this.load.audio('1', 'dancingpigs/1.mp3');
+	this.load.audio('2', 'dancingpigs/2.mp3');
+	this.load.audio('3', 'dancingpigs/3.mp3');
+	this.load.audio('4', 'dancingpigs/4.mp3');
+	this.load.audio('wasted', 'dancingpigs/wasted.mp3');
+
+	this.load.audio('hat', 'kit-hat.mp3')
+	this.load.audio('snare', 'kit-snare.mp3')
+	this.load.audio('tom', 'kit-tom.mp3')
+}
+
+var gui;
+
+var pig;
+var frog;
+var tugboat;
+var robot;
+var girl;
+var anime;
+
+var drums;
+var notes = [];
+var loopNote;
+var hat;
+var snare;
+var tom;
+var v1, v2, v3, v4;
+var wasted;
+
+function create() {
+	tugboat = this.add.image(445, 252, 'tugboat');
+	robot = this.add.image(245, 292, 'robot');
+	pig = this.add.image(685, 382, 'pig');
+	girl = this.add.image(1395, 252, 'girl');
+	frog = this.add.image(1145, 252, 'frog');
+	anime = this.add.image(945, 352, 'anime');
+
+	// bass = this.sound.add('bass');
+	drums = this.sound.add('drums');
+	loopNote = this.sound.add('loopNote');
+
+	notes.push(this.sound.add('e4'));
+	notes.push(this.sound.add('f4'));
+	notes.push(this.sound.add('f#4'));
+	notes.push(this.sound.add('g4'));
+	notes.push(this.sound.add('g#4'));
+	notes.push(this.sound.add('a4'));
+	notes.push(this.sound.add('a#4'));
+	notes.push(this.sound.add('b4'));
+	notes.push(this.sound.add('c5'));
+	notes.push(this.sound.add('c#5'));
+	notes.push(this.sound.add('d5'));
+	notes.push(this.sound.add('d#5'));
+	notes.push(this.sound.add('e5'));
+
+	v1 = this.sound.add('1');
+	v2 = this.sound.add('2');
+	v3 = this.sound.add('3');
+	v4 = this.sound.add('4');
+	wasted = this.sound.add('wasted');
+
+	hat = this.sound.add('hat');
+	snare = this.sound.add('snare');
+	tom = this.sound.add('tom');
+
+	for (var i = 0; i < notes.length; i += 1) {
+		notes[i].addMarker({name: notes[i].key, start: 0, duration: 1});
+	}
+
+	gui = new dat.GUI();
+	var sm = gui.addFolder('Sound Manager');
+	sm.add(this.sound, 'rate', 0.5, 2).listen();
+	sm.add(this.sound, 'detune', -1200, 1200).step(50).listen();
+
+	loopNote.addMarker({
+		name: 'loop',
+		start: 0,
+		duration: 0.25,
+		config: {
+			loop: true
+		}
+	});
+
+	// Delay option can only be passed in config
+	loopNote.play('loop', {
+		delay: 0,
+		volume: 0
+	});
+
+	if (this.sound.locked) {
+		// var text = this.add.bitmapText(400, 70, 'atari-classic', 'Tap to start', 40);
+		// text.x -= Math.round(text.width/2);
+		// text.y -= Math.round(text.height/2);
+
+		this.sound.once('unlocked', function (soundManager) {
+			// text.visible = false;
+			startStem.call(this, loopNote, 'loop');
+		}, this);
+	} else {
+		startStem.call(this, loopNote, 'loop');
+	}
+
+	this.tweens.add({
+		targets: pig,
+		scaleX: 1.3,
+		scaleY: 1.1,
+		duration: 500,
+		ease: 'Sine.easeInOut',
+		repeat: -1,
+		yoyo: true
+	});
+
+	this.tweens.add({
+		targets: frog,
+		scaleX: 0.8,
+		scaleY: 0.7,
+		duration: 1500,
+		ease: 'Sine.easeInOut',
+		repeat: -1,
+		yoyo: true
+	});
+
+	this.tweens.add({
+		targets: tugboat,
+		scaleX: 0.8,
+		scaleY: 0.7,
+		duration: 2000,
+		ease: 'Sine.easeInOut',
+		repeat: -1,
+		yoyo: true
+	});
+
+	this.tweens.add({
+		targets: robot,
+		scaleX: 0.8,
+		scaleY: 0.7,
+		duration: 1500,
+		ease: 'Sine.easeInOut',
+		repeat: -1,
+		yoyo: true
+	});
+
+	this.tweens.add({
+		targets: girl,
+		scaleX: 0.8,
+		scaleY: 0.7,
+		duration: 1000,
+		ease: 'Sine.easeInOut',
+		repeat: -1,
+		yoyo: true
+	});
+
+	this.tweens.add({
+		targets: anime,
+		scaleX: 0.8,
+		scaleY: 0.7,
+		duration: 1000,
+		ease: 'Sine.easeInOut',
+		repeat: -1,
+		yoyo: true
+	});
+
+	loopNote.on('looped', function (sound) {
+		step();
+	}, this);
+
+}
+
+function startStem(stem, text) {
+	var s = gui.addFolder(text);
+	s.add(stem, 'seek', 0, stem.duration).step(0.01).listen();
+	s.add(stem, 'mute').listen();
+	s.open();
+}
+
+function update() {
+	this.tweens.setGlobalTimeScale(loopNote.totalRate);
+}
+
+// init music
+var debug = false;
+var piano = new Tone.Synth().toMaster();
+piano.set({
+	oscillator: {
+		type: 'sawtooth'
+	},
+	envelope: {
+		attack: 0.01,
+		decay: 0.1,
+		sustain: 0.2,
+		release: 1.2
+	}
+});
+piano.volume.value = -10;
+
+var polySynth = new Tone.PolySynth(4, Tone.Synth).toMaster();
+polySynth.set({
+	oscillator: {
+		type: 'triangle'
+	},
+	envelope: {
+		attack: 0.01,
+
+		decay: 0.2,
+		sustain: 0.2,
+		release: 1.2
+	}
+});
+
+var chords = [
+	['b3', 'd4', 'f#4', 'd4'],
+	['g3', 'b3', 'd4', 'b3'],
+	['e3', 'g3', 'b3', 'g3'],
+	['f#3', 'a#3', 'c#4', 'e4'],
+	['a3', 'c#4', 'e4'],
+];
+var scales = [
+	['b', 'c#', 'd', 'e', 'f#', 'a'],
+	['b', 'c#', 'd', 'e', 'f#', 'a'],
+];
+var melody = ['e4', 'f4', 'f#4', 'g4', 'g#4', 'a4', 'a#4', 'b4', 'c5', 'c#5', 'd5', 'd#5'];
+
+var progression = [
+	0,0,1,1,
+	0,0,1,1,
+
+	0,0,1,1,
+	0,0,1,1,
+	2,3,1,4,
+	2,3,1,4,
+
+	0,0,1,1,
+	0,0,1,1,
+	2,3,1,4,
+	2,3,1,4,
+];
+var progressionScales = [
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+];
+var progressionPatterns = [
+	3,3,3,3,
+	3,3,3,3,
+
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+];
+var drumPatterns = [
+	3, 3, 3, 3,
+	3, 3, 3, 3,
+
+	3, 3, 3, 3,
+	3, 3, 3, 3,
+	0, 0, 0, 0,
+	0, 0, 0, 1,
+
+	3, 3, 3, 3,
+	3, 3, 3, 3,
+	0, 0, 0, 0,
+	0, 0, 0, 1,
+];
+var playMelody = [
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+
+	0,0,0,0,
+	0,0,0,0,
+	0,0,0,0,
+	0,0,0,0,
+
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+];
+
+var eights = 0;
+var measures = 0;
+var skipNext = false;
+
+// init DQN agent
+var env = {};
+env.getNumStates = () => { return 4; }
+env.getMaxNumActions = () => { return melody.length; }
+var spec = {};
+spec.epsilon = 0; // exploration rate
+spec.alpha = 0; // learning rate
+spec.experience_add_every = 1;
+spec.experience_size = 15000;
+agent = new RL.DQNAgent(env, spec);
+
+var oldAgent = localStorage.getItem('index5');
+try {
+	oldAgent = JSON.parse(oldAgent);
+	if (oldAgent) {
+		agent.fromJSON(oldAgent);
+	}
+} catch (e) { console.log(e); }
+
+var lastState = [1, 5, 6, progression[measures]];
+var thisState;
+
+window.onload = () => {
+	if (debug) console.log('onload');
+	var els = document.querySelectorAll('button');
+	for (var i = 0; i < els.length; i += 1) {
+		els[i].onclick = e => {
+			window[e.target.className] = true;
+			if (e.target.className === 'save') {
+				localStorage.setItem('index5', JSON.stringify(agent.toJSON()));
+			}
+		}
+	}
+
+	document.querySelector('.epsilon').value = agent.epsilon;
+	document.querySelector('.epsilon').onchange = e => {
+		agent.epsilon = Number(e.target.value);
+	};
+
+	document.querySelector('.alpha').value = agent.alpha;
+	document.querySelector('.alpha').onchange = e => {
+		agent.alpha = Number(e.target.value);
+	};
+
+	var started = false;
+	var startButton = document.querySelector('.start');
+	if (startButton) {
+		startButton.addEventListener('mousedown', () => {
+		});
+	}
+};
+
+var time = '+0';
+function step() {
+	// get this beat's info
+	if (eights % 8 === 0) {
+		thisChord = progression[measures];
+		thisScale = progressionScales[measures];
+		thisProgressionPattern = progressionPatterns[measures];
+		thisDrumPattern = drumPatterns[measures];
+		thisPlayMelody = playMelody[measures];
+	}
+
+	// get this state attributes
+	if (eights % 2 === 0) {
+		//get some action
+		var action = agent.act(lastState);
+
+		var thisStrong = eights % 4 === 0;
+		var modScale = scales[thisScale].map(note => {
+			var chord = chords[thisChord];
+			for (var i = 0; i < chord.length; i += 1) {
+				if (chord[i].slice(0, 1) === note.slice(0, 1)) {
+					return chord[i].slice(0, -1);
+				}
+			}
+			return note;
+		});
+
+		var inScale = modScale.indexOf(melody[action].slice(0, -1)) !== -1
+		var inChord = chords[thisChord].reduce((a, v) => {
+			return a ? a : melody[action].slice(0, -1) === v.slice(0, -1)
+		}, false);
+		var semitoneDiff = Math.abs(lastState[2] - action);
+		var differentFromLast2 = action !== lastState[2] && action !== lastState[1];
+		var sameDirection = (action - lastState[2] > 0 && lastState[2] - lastState[1] > 0) ||
+							(action - lastState[2] < 0 && lastState[2] - lastState[1] < 0);
+
+		// calculate reward based on new state
+		var reward = 0;
+		if (inChord && thisStrong) {
+			reward = 2;
+		} else if (inScale) {
+			reward = 1;
+		} else {
+			reward = -1;
+		}
+
+		if (inScale) {
+			if (semitoneDiff === 0) { // same note
+				reward = -1;
+			} else if ([6,10,11].indexOf(semitoneDiff) !== -1) { // TT m7 M7
+				reward = -1;
+			} else if ([1,2,3,4].indexOf(semitoneDiff) !== -1) { // m2 M2 m3 M3
+				reward += 1;
+			}
+
+			if (differentFromLast2) {
+				reward += 1;
+			}
+
+			if (sameDirection) {
+				reward += 1;
+			}
+		}
+
+		// LEARN
+		agent.learn(reward);
+
+		var good = document.querySelector('.good');
+		var bad = document.querySelector('.bad');
+		var g = Number(good.innerHTML.slice(0, -5));
+		var b = Number(bad.innerHTML.slice(0, -4));
+		if (reward > 0) {
+			good.innerHTML = g + reward + ' good';
+		} else {
+			bad.innerHTML = b - reward + ' bad';
+		}
+		var percent = document.querySelector('.percent');
+		percent.innerHTML = (b / (g !== 0 ? g : 1) * 100).toFixed(2) + '% bad/good';
+
+		// melody
+		if (!skipNext && thisPlayMelody) {
+			notes[action].play(notes[action].key, {
+				start: 0,
+				duration: 1,
+				delay: 0.04,
+				volume: 0.2,
+			});
+		} else {
+			skipNext = false;
+		}
+		if (Math.random() < 0.8 && inChord && thisStrong) {
+			skipNext = true;
+		}
+
+		lastState = [thisStrong ? 1 : 0, lastState[2], action, thisChord];
+	}
+
+	// chords
+	switch (thisProgressionPattern) {
+		case 0: // arpeggio on quarters
+			if (eights % 2 === 0) {
+				polySynth.triggerAttackRelease(chords[thisChord][(eights / 2) % chords[thisChord].length], '4n', time);
+			}
+		break;
+		case 1: // on snare
+			if ([2, 6].indexOf(eights % 8) !== -1) {
+				polySynth.triggerAttackRelease(chords[thisChord], '8n', time);
+			}
+		break;
+		case 2: // da da Daaaaaaa
+			if (eights % 8 === 0) {
+				polySynth.triggerAttackRelease(chords[thisChord], '2n', time);
+			} else if ([6,7].indexOf(eights % 8) !== -1) {
+				polySynth.triggerAttackRelease(chords[thisChord], '8n', time);
+			}
+		break;
+		case 3:
+			if (eights % 8 === 0) {
+				polySynth.triggerAttackRelease(chords[thisChord][0], '2n', time);
+			}
+		break;
+	}
+
+	// vocals
+	if (eights % 8 === 0) {
+		if (measures % progression.length === 8) {
+			v1.play('', {
+				start: 0,
+			});
+		} else if (measures % progression.length === 12) {
+			v2.play('', {
+				start: 0,
+			});
+		} else if (measures % progression.length === 15) {
+			v3.play('', {
+				start: 0,
+				delay: 0.4
+			});
+		} else if (measures % progression.length === 20) {
+			v4.play('', {
+				start: 0,
+			});
+		}
+
+	}
+
+	if (measures % progression.length === 11 && eights % 8 === 7) {
+		wasted.play('', {volume: 0.2});
+	}
+
+	// drums
+	switch (thisDrumPattern) {
+		case 0:
+			if ([0, 1, 4].indexOf(eights % 8) !== -1) { // tom
+				tom.play('', {delay: 0.08});
+			}
+			if (eights % 4 === 2) { // snare
+				snare.play('', {delay: 0.08});
+			}
+			if (eights % 2 === 0) { // hihat
+				hat.play('', {delay: 0.08});
+			}
+		break;
+		case 1:
+			snare.play('', {delay: 0.08});
+			tom.play('', {delay: 0.08});
+			if (eights % 2 === 0) { // hihat
+				hat.play('', {delay: 0.08});
+			}
+		break;
+		case 2:
+			if (eights % 8 === 0) {
+				snare.play('', {delay: 0.08});
+				tom.play('', {delay: 0.08});
+			}
+			if (eights % 4 === 0) { // hihat
+				hat.play('', {delay: 0.08, volume: 0.7});
+			}
+		break;
+		case 3:
+			if ([0, 3, 4, 7].indexOf(eights % 8) !== -1) { // hihat
+				hat.play('', {delay: 0.08, volume: 0.5});
+			}
+		break;
+	}
+
+	if (eights % 8 === 0) {
+		measures++;
+		if (measures > progression.length - 1) measures = 0;
+	}
+	eights++;
+}
+
+
+		</script>
+	</head>
+
+	<body>
+		<div class="bad">0 bad</div>
+		<div class="good">0 good</div>
+		<div class="percent">0.00%</div>
+		<!-- <button class="start">start</button> -->
+		<button class="save">save</button>
+		<br>
+		<label>exploration
+			<input type="range" min="0" max="1" class="epsilon" value="0" step="any">
+		</label>
+		<label>learning rate
+			<input type="range" min="0" max="0.02" class="alpha" value="0" step="any">
+		</label>
+	</body>
+</html>

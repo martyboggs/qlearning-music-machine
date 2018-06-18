@@ -1,6 +1,9 @@
 *.log
 /node_modules/*
-!/node_modules/tone/
+!/node_modules/tone
 /node_modules/tone/Tone
 /reinforcejs/*
 !/reinforcejs/lib
+!/node_modules/dat.gui
+/node_modules/dat.gui/*
+!/node_modules/dat.gui/build
