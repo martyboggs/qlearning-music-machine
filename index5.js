@@ -184,8 +184,8 @@ var env = {};
 env.getNumStates = () => { return 4; }
 env.getMaxNumActions = () => { return melody.length; }
 var spec = {};
-spec.epsilon = 0; // exploration rate
-spec.alpha = 0; // learning rate
+// spec.epsilon = 0; // exploration rate
+// spec.alpha = 0; // learning rate
 spec.experience_add_every = 1;
 spec.experience_size = 15000;
 agent = new RL.DQNAgent(env, spec);
