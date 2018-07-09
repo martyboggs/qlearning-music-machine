@@ -1,0 +1,385 @@
+<html>
+<head>
+<style>
+body {
+	font-size: 20px;
+	text-align: center;
+	font-weight: bold;
+	margin: 0;
+	background: #000;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+input#text-field {
+	font-size: 60px;
+	order: 1;
+	text-align: center;
+	width: 100px;
+	background: black;
+	border: 1px solid white;
+	color: white;
+	margin-top: 15px;
+}
+
+input#text-field:focus {
+	border: 1px solid blue;
+}
+</style>
+<!-- <script src="node_modules/tone/build/Tone.js"></script> -->
+<script src="https://unpkg.com/tone@0.12.80/build/Tone.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.9.0/dist/phaser.js"></script>
+<script src="node_modules/dat.gui/build/dat.gui.min.js"></script>
+<script src="reinforcejs/lib/rl.js"></script>
+<script>
+
+var config = {
+	type: Phaser.AUTO,
+	width: 1000,
+	height: 800,
+	backgroundColor: '#000000',
+	parent: 'phaser-example',
+	physics: {
+		default: 'matter',
+		matter: {
+			gravity: {
+				y: 0.8
+			},
+			debug: true,
+			debugBodyColor: 0xffffff
+		}
+	},
+	scene: {
+		preload: preload,
+		create: create,
+		update: update
+	}
+}
+
+// init DQN agent
+
+var env = {};
+env.getNumStates = () => { return 10; }
+env.getMaxNumActions = () => { return 17; }
+var spec = {};
+var brain_key = 'ragdoll-walk';
+// spec.epsilon = 0; // exploration rate
+// spec.alpha = 0; // learning rate
+spec.experience_add_every = 1;
+spec.experience_size = 500000;
+agent = new RL.DQNAgent(env, spec);
+agent.save = function () {
+	localStorage.setItem(brain_key, JSON.stringify(agent.toJSON()));
+	console.log('saved');
+};
+
+var oldAgent = localStorage.getItem(brain_key);
+try {
+	oldAgent = JSON.parse(oldAgent);
+	if (oldAgent) {
+		agent.fromJSON(oldAgent);
+	}
+} catch (e) { console.log(e); }
+
+var lastState = [-90, 8, 350, 0, 0];
+var lastAction = 8;
+var thisState;
+var reward = 0;
+var posReward = 0;
+var checkReward = 0;
+var totalReward = 0;
+
+var game = new Phaser.Game(config);
+var scene;
+var frame = 0;
+
+function preload() {
+	this.load.bitmapFont('font', 'interactive-game-song/m_0.png', 'interactive-game-song/m.fnt');
+	this.load.image('shrapnel', 'interactive-game-song/shrapnel.jpg');
+	this.load.image('platform', 'interactive-game-song/platform.jpg');
+	this.load.spritesheet('dog', 'interactive-game-song/dog.png', {
+		frameWidth: 90,
+		frameHeight: 58,
+		endFrame:26
+	});
+}
+
+var run = 5;
+var current = 2;
+var bullets = [];
+var monsters = [];
+var animals = [];
+var shrapnels = [];
+
+function create() {
+	scene = game.scene.scenes[0];
+	// this.matter.world.setBounds();
+	this.matter.add.mouseSpring();
+	this.matter.add.image(config.width / 2, 750, 'platform', null, {
+		isStatic: true,
+	}),
+
+	scene.anims.create({key: 'bark', frames: scene.anims.generateFrameNames('dog', {start: 0, end: 3}), frameRate: 10, repeat: -1});
+	scene.anims.create({key: 'walk', frames: scene.anims.generateFrameNames('dog', {start: 6, end: 11}), frameRate: 10, repeat: -1});
+	scene.anims.create({key: 'run', frames: scene.anims.generateFrameNames('dog', {start: 12, end: 16}), frameRate: 10, repeat: -1});
+	scene.anims.create({key: 'wag', frames: scene.anims.generateFrameNames('dog', {start: 18, end: 21}), frameRate: 10, repeat: -1});
+	scene.anims.create({key: 'sit', frames: scene.anims.generateFrameNames('dog', {start: 24, end: 26}), frameRate: 10});
+
+	new Monster(1);
+}
+var drewText = '';
+
+function Bullet(char) {
+	bullets.push(this);
+	this.age = 0;
+	this.text = scene.add.bitmapText(config.width / 2, config.height - 64, 'font', char, 64, 'center');
+	this.text.x -= this.text.width / 2;
+	this.tween = null;
+
+	// find something to move toward
+	this.target = null;
+	this.targetX;
+	this.targetY;
+	this.findTarget(char);
+}
+Bullet.prototype = {
+	findTarget: function (char) {
+		for (var i = 0; i < monsters.length; i += 1) {
+			var texts = monsters[i].texts.getChildren();
+			for (var j = texts.length - 1; j >= 0; j -= 1) {
+				for (var k = 0; k < texts[j].text.length; k += 1) {
+					if (texts[j].text[k] === char && texts[j].y > -80) {
+						this.target = monsters[i];
+						this.targetX = texts[j].x + 34 * k; // letter width
+						this.targetY = texts[j].y;
+						return;
+					}
+				}
+			}
+		}
+		return null;
+	},
+	destroy: function () {
+		this.text.destroy();
+		bullets.splice(bullets.indexOf(this), 1);
+	},
+	update: function () {
+		if (!this.target && this.age > 60) {
+			this.destroy();
+		} else if (this.target && !this.tween) {
+			this.tween = scene.tweens.add({
+				targets: [this.text],
+				x: this.targetX,
+				y: this.targetY,
+				duration: Phaser.Math.Distance.Between(this.text.x, this.text.y, this.targetX, this.targetY),
+				callbackScope: this,
+				onComplete: this.explode
+			});
+		}
+		this.age += 1;
+	},
+	explode: function () {
+		this.target.hit(this.text.text);
+		this.destroy();
+	}
+};
+
+function Monster(type) {
+	monsters.push(this);
+	this.texts = scene.add.group();
+	if (!type) type = Math.floor(Math.random() * 2);
+
+	// '\u263A\u00C4\u263B\u00C5\u2665\u00C9\u2666\u00E6\u2663\u00C6\u2660\u00F4\u2022\u00F6\u25D8\u00F2\u25CB\u00FB\u25D9\u00F9\u2642\u00FF\u2640\u00D6\u266A\u00DC\u266B\u00A2\u263C\u00A3\u25BA\u00A5\u25C4\u20A7\u2195\u0192\u203C\u00E1\u00B6\u00ED\u00A7\u00F3\u25AC\u00FA\u21A8\u00F1\u2191\u00D1\u2193\u00AA\u2192\u00BA\u2190\u00BF\u221F\u2310\u2194\u00AC\u25B2\u00BD\u25BC\u00BC\u00A1\u2302\u00AB\u00C7\u00BB\u00FC\u2591\u00E9\u2592\u00E2\u2593\u00E4\u2502\u00E0\u2524\u00E5\u2561\u00E7\u2562\u00EA\u2556\u00EB\u2555\u00E8\u2563\u00EF\u2551\u00EE\u2557\u00EC\u255D\u255C\u221E\u00D2\u255B\u03C6\u00D3\u2510\u03B5\u00D4\u2514\u2229\u00A4\u00D5\u2534\u2261\u252C\u00B1\u00A6\u00D7\u251C\u2265\u00D8\u2500\u2264\u00A8\u00D9\u253C\u2320\u00A9\u00DA\u255E\u2321\u00DB\u255F\u00F7\u255A\u2248\u00DD\u2554\u00B0\u00AE\u00DE\u2569\u2219\u00AF\u00DF\u2566\u00B7\u2560\u221A\u2550\u207F\u00B2\u256C\u00B3\u00E3\u2567\u25A0\u00B4\u2568\u00B5\u2564\u20AC\u2565\u201A\u2559\u00B8\u2558\u201E\u00B9\u2552\u2026\u2553\u2020\u256B\u2021\u256A\u02C6\u2518\u2030\u00BE\u250C\u0160\u2588\u2039\u00C0\u00F0\u2584\u0152\u00C1\u258C\u017D\u00C2\u2590\u2018\u00C3\u2580\u2019\u03B1\u201C\u00F5\u201D\u0393\u03C0\u2013\u00C8\u00F8\u03A3\u2014\u03C3\u02DC\u00CB\u2122\u00CC\u03C4\u0161\u00CD\u03A6\u203A\u00CE\u00FD\u0398\u0153\u00CF\u00FE\u03A9\u017E\u00D0\u03B4\u0178',
+
+	var chars = [
+		[
+			'\u263a\u263a\u263a\u263a\u263a',
+			'\u03A9\u03A9\u03A9\u03A9\u03A9\u03A9\u03A9\u03A9',
+			'\u2665\u2665\u2665\u2665\u2665',
+		],
+		[
+			'\u263A \u263A \u263A \u263A',
+			'\u263A \u263A \u263A \u263A \u263A',
+		]
+	];
+
+	for (var i = 0; i < chars[type].length; i += 1) {
+		var text = scene.add.bitmapText(config.width / 2, -64 * chars[type].length + 64 * i, 'font', chars[type][i], 64, 'center');
+		text.x -= text.width / 2;
+		text.ogx = text.x;
+		text.setDepth(-5);
+		this.texts.add(text);
+	}
+}
+Monster.prototype = {
+	hit: function (char) {
+		if (!this.texts.children) return;
+		var texts = this.texts.getChildren();
+		for (var i = texts.length - 1; i >= 0; i -= 1) {
+			for (var j = 0; j < texts[i].text.length; j += 1) {
+				if (texts[i].y > -80 && texts[i].text[j] === char) {
+					texts[i].text = texts[i].text.slice(0, j) + ' ' + texts[i].text.slice(j + 1);
+					var shrapnel;
+					for (var k = 0; k < 5; k += 1) {
+						shrapnel = scene.matter.add.image(texts[i].x, texts[i].y, 'shrapnel');
+						shrapnel.angle = Math.random() * 360;
+						shrapnel.setBody({width: 10, height: 20});
+						shrapnel.setDisplayOrigin(5, 12);
+						shrapnel.setVelocity(Math.random() * 10);
+						shrapnel.setAngularVelocity(Math.random() * 10);
+						shrapnels.push(shrapnel);
+					}
+
+					if (!texts[i].text.trim()) {
+						this.texts.remove(texts[i]);
+					}
+					return true;
+				}
+			}
+		}
+		return false;
+	},
+	destroy: function () {
+		this.texts.destroy({destroyChildren: true});
+		monsters.splice(monsters.indexOf(this), 1);
+	},
+	update: function () {
+		var texts = this.texts.getChildren();
+		for (var i = 0; i < texts.length; i += 1) {
+			texts[i].x = texts[i].ogx + 10 * Math.sin(frame / (i + 5) / 2 / Math.PI);
+			texts[i].y += 0.2;
+		}
+
+		if (texts.length === 0 || texts[0].y > config.height - 50) {
+			new Monster();
+			this.destroy();
+			return;
+		}
+	}
+};
+
+function Animal() {
+	animals.push(this);
+	this.image = scene.matter.add.sprite(Math.random() * (config.width - 200) + 50, config.height - 50, 'dog', null, {});
+	this.image.setY(config.height - this.image.height);
+	this.image.setBody({height: 30, width: 40});
+	this.image.setDisplayOrigin(this.image.width / 2, 44);
+	this.image.setDepth(5);
+
+	this.changeFrequency = Math.round(Math.random() * 1300 + 100);
+
+	// scene.matter.world.on('collisionstart', function (e, a, b) {
+	// 	console.log(e, a, b);
+	// });
+}
+Animal.prototype = {
+	update: function () {
+		if (frame % this.changeFrequency === 0) {
+			this.animation = Math.floor(Math.random() * 5);
+			switch (this.animation) {
+				case 0: this.image.anims.play('bark'); break;
+				case 1: this.image.anims.play('walk'); break;
+				case 2: this.image.anims.play('run'); break;
+				case 3: this.image.anims.play('wag'); break;
+				case 4: this.image.anims.play('sit'); break;
+			}
+		}
+
+		if (frame % this.changeFrequency === 0 && Math.random() > 0.5) {
+			this.image.scaleX *= -1;
+		}
+		if (this.image.x < 150) {
+			this.image.scaleX = -1;
+		} else if (this.image.x > config.width - 150) {
+			this.image.scaleX = 1;
+		}
+
+		if (frame % 3 === 0 && this.image.anims.currentAnim && Math.abs(this.image.body.velocity.x) < 3) {
+			if (this.image.anims.currentAnim.key === 'walk') {
+				this.image.applyForce({x: this.image.scaleX > 0 ? -0.003 : 0.003, y: 0});
+			} else if (this.image.anims.currentAnim.key === 'run') {
+				this.image.applyForce({x: this.image.scaleX > 0 ? -0.006 : 0.006, y: 0});
+			}
+		}
+
+		this.image.setAngularVelocity(0);
+
+		if (this.image.y > config.height + 50) {
+			this.destroy();
+		}
+	},
+	destroy: function () {
+		this.image.destroy();
+		animals.splice(animals.indexOf(this), 1);
+	}
+};
+
+function update() {
+	if (animals.length < 2) {
+		new Animal();
+	}
+
+	// update stuff
+	for (var i = 0; i < monsters.length; i += 1) {
+		monsters[i].update();
+	}
+
+	for (var i = 0; i < bullets.length; i += 1) {
+		bullets[i].update();
+	}
+
+	for (var i = 0; i < animals.length; i += 1) {
+		animals[i].update();
+	}
+
+	for (var i = 0; i < shrapnels.length; i += 1) {
+		if (shrapnels[i].y > config.height + 50) {
+			shrapnels[i].destroy();
+			shrapnels.splice(shrapnels.indexOf(shrapnels[i]), 1);
+		}
+	}
+
+	frame += 1;
+}
+
+window.onload = function () {
+	var gui = new dat.GUI();
+	var sm = gui.addFolder('Computer Brains');
+	sm.open();
+	sm.add(agent, 'epsilon', 0, 1).listen();
+	sm.add(agent, 'alpha', 0, 0.02).listen();
+	sm.add(agent.exp, 'length', 0, 500000).listen();
+	sm.add(window, 'posReward').listen();
+	sm.add(window, 'totalReward').listen();
+	sm.add(agent, 'save');
+
+	var textEl = document.getElementById('text-field');
+	var textLastValue = '';
+
+	// textEl.oninput = function (e) {
+	// 	if (textLastValue !== textEl.value) {
+	// 		text = textEl.value;
+
+	// 		textLastValue = textEl.value;
+	// 	}
+	// };
+
+	textEl.onkeydown = function (e) {
+		if (!e.target.value) return;
+
+		if (e.which === 13) {
+			if (e.target.value === ' ') return;
+			new Bullet(e.target.value);
+			textEl.value = '';
+		}
+	}
+};
+
+</script>
+</head>
+
+<body>
+	<input id="text-field" type="text" autocomplete="off" spellcheck="false" maxlength="1" />
+</body>
+</html>
