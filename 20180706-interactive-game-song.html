@@ -1,43 +1,132 @@
 <html>
 <head>
-<style>
-body {
-	font-size: 20px;
-	text-align: center;
-	font-weight: bold;
-	margin: 0;
-	background: #000;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-}
-
-input#text-field {
-	font-size: 60px;
-	order: 1;
-	text-align: center;
-	width: 100px;
-	background: black;
-	border: 1px solid white;
-	color: white;
-	margin-top: 15px;
-}
-
-input#text-field:focus {
-	border: 1px solid blue;
-}
-</style>
-<!-- <script src="node_modules/tone/build/Tone.js"></script> -->
-<script src="https://unpkg.com/tone@0.12.80/build/Tone.js"></script>
+<link rel="stylesheet" href="interactive-game-song/main.css" />
+<script src="node_modules/tone/build/Tone.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.9.0/dist/phaser.js"></script>
 <script src="node_modules/dat.gui/build/dat.gui.min.js"></script>
 <script src="reinforcejs/lib/rl.js"></script>
+<script src="interactive-game-song/Bullet.js"></script>
+<script src="interactive-game-song/Monster.js"></script>
+<script src="interactive-game-song/Animal.js"></script>
 <script>
+navigator.requestMIDIAccess()
+	.then(onMIDISuccess);
+function onMIDISuccess(midiAccess) {
+	for (var input of midiAccess.inputs.values()) {
+		input.onmidimessage = getMIDIMessage;
+	}
+}
+var cont = {};
+// interlocking foosball controller
+function getMIDIMessage(midiMessage) {
+	var key;
+	var d = midiMessage.data;
+	if (d[0] === 186) {
+		key = 'knob';
+		cont[key + (d[1] - 1)] = d[2];
+	} else if (d[0] === 154 || d[0] === 138) {
+		key = 'butt';
+		cont[key + d[1]] = d[2];
+	}
+}
+
+var chords = [
+	['d3', 'f#4', 'a4'],
+	['g3', 'b3', 'd4'],
+	['f3', 'a3', 'c3'],
+	['a3', 'c#4', 'e4'],
+];
+var scales = [
+	['d', 'e', 'f#', 'a', 'b', 'c#'],
+	// ['b', 'c#', 'd', 'e', 'f#', 'a'],
+];
+var melody = ['e4', 'f4', 'f#4', 'g4', 'g#4', 'a4', 'a#4', 'b4', 'c5', 'c#5', 'd5', 'd#5'];
+
+var progression = [
+	0,0,1,1,
+	0,0,1,1,
+	0,0,1,1,
+	0,0,1,1,
+	0,0,1,1,
+	0,0,1,1,
+
+	0,0,1,1,
+	0,0,1,1,
+	2,2,1,1,
+	2,2,1,1,
+
+	0,0,1,1,
+	0,0,1,1,
+];
+var progressionScales = [
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+];
+var progressionPatterns = [
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+	3,3,3,3,
+
+	3,3,3,3,
+	3,3,3,3,
+];
+var drumPatterns = [
+	0,0,0,2,
+	0,0,0,2,
+	0,0,0,2,
+	0,0,0,2,
+	0,0,0,2,
+	0,0,0,2,
+
+	0,0,0,2,
+	0,0,0,2,
+	0,0,0,2,
+	0,0,0,2,
+
+	3,3,3,2,
+	3,3,3,2,
+];
+var playMelody = [
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+
+	1, 1, 1, 1,
+	1, 1, 1, 1,
+];
 
 var config = {
 	type: Phaser.AUTO,
-	width: 1000,
-	height: 800,
+	width: 800,
+	height: 600,
 	backgroundColor: '#000000',
 	parent: 'phaser-example',
 	physics: {
@@ -46,29 +135,28 @@ var config = {
 			gravity: {
 				y: 0.8
 			},
-			debug: true,
-			debugBodyColor: 0xffffff
+			// debug: true,
 		}
 	},
 	scene: {
 		preload: preload,
 		create: create,
-		update: update
+			update: update
 	}
 }
 
 // init DQN agent
 
 var env = {};
-env.getNumStates = () => { return 10; }
-env.getMaxNumActions = () => { return 17; }
+env.getNumStates = () => { return 4; }
+env.getMaxNumActions = () => { return melody.length; }
 var spec = {};
-var brain_key = 'ragdoll-walk';
 // spec.epsilon = 0; // exploration rate
 // spec.alpha = 0; // learning rate
 spec.experience_add_every = 1;
 spec.experience_size = 500000;
-agent = new RL.DQNAgent(env, spec);
+var agent = new RL.DQNAgent(env, spec);
+var brain_key = 'interactive-game-song';
 agent.save = function () {
 	localStorage.setItem(brain_key, JSON.stringify(agent.toJSON()));
 	console.log('saved');
@@ -82,17 +170,62 @@ try {
 	}
 } catch (e) { console.log(e); }
 
-var lastState = [-90, 8, 350, 0, 0];
-var lastAction = 8;
-var thisState;
+var now = {
+	state: [],
+	action: 0,
+	chord: [],
+	scale: 0,
+	progressionPattern: 0,
+	drumPattern: 0,
+	playMelody: 0
+};
+
+// bean bomb ball
+
+var last = {
+	state: [1, 5, 6, progression[0]],
+	action: 8,
+};
+
 var reward = 0;
 var posReward = 0;
-var checkReward = 0;
-var totalReward = 0;
+var negReward = 0;
 
 var game = new Phaser.Game(config);
 var scene;
 var frame = 0;
+var rand = 0;
+var scoreText;
+var bullets = [];
+var monsters = [];
+var animals = [];
+var shrapnels = [];
+var platform2;
+var gameSounds = {};
+
+var eights = 0;
+var measures = 0;
+var skipNext = false;
+var skipNext3 = 3;
+var loopNote;
+var notes = [];
+var hat;
+var snare;
+var tom;
+var words;
+var song;
+
+// game
+// music
+// ai
+// controller
+
+// unicode/music
+// unicode/ai
+// music/ai
+
+
+// notes and neurons and characters and keys
 
 function preload() {
 	this.load.bitmapFont('font', 'interactive-game-song/m_0.png', 'interactive-game-song/m.fnt');
@@ -103,221 +236,167 @@ function preload() {
 		frameHeight: 58,
 		endFrame:26
 	});
-}
 
-var run = 5;
-var current = 2;
-var bullets = [];
-var monsters = [];
-var animals = [];
-var shrapnels = [];
+	this.load.audio('loopNote', 'dancingpigs/e4.mp3');
+	this.load.audio('e4', 'dancingpigs/e4.mp3');
+	this.load.audio('f4', 'dancingpigs/f4.mp3');
+	this.load.audio('f#4', 'dancingpigs/ff4.mp3');
+	this.load.audio('g4', 'dancingpigs/g4.mp3');
+	this.load.audio('g#4', 'dancingpigs/gg4.mp3');
+	this.load.audio('a4', 'dancingpigs/a4.mp3');
+	this.load.audio('a#4', 'dancingpigs/aa4.mp3');
+	this.load.audio('b4', 'dancingpigs/b4.mp3');
+	this.load.audio('c5', 'dancingpigs/c5.mp3');
+	this.load.audio('c#5', 'dancingpigs/cc5.mp3');
+	this.load.audio('d5', 'dancingpigs/d5.mp3');
+	this.load.audio('d#5', 'dancingpigs/dd5.mp3');
+	this.load.audio('e5', 'dancingpigs/e5.mp3');
+
+	this.load.audio('hat', 'kit-hat.mp3')
+	this.load.audio('snare', 'kit-snare.mp3')
+	this.load.audio('tom', 'kit-tom.mp3')
+
+	this.load.audio('shoot', 'interactive-game-song/shoot.wav');
+	this.load.audio('explode', 'interactive-game-song/explode.wav');
+	this.load.audio('explode2', 'interactive-game-song/explode2.wav');
+
+	this.load.audio('words', 'interactive-game-song/words.mp3');
+	this.load.audio('song', 'interactive-game-song/song.mp3');
+}
 
 function create() {
-	scene = game.scene.scenes[0];
-	// this.matter.world.setBounds();
+	var gui = new dat.GUI();
+	var sm = gui.addFolder('Computer Brains');
+	sm.open();
+	sm.add(agent, 'epsilon', 0, 1).listen();
+	sm.add(agent, 'alpha', 0, 0.02).listen();
+	sm.add(agent.exp, 'length', 0, 500000).listen();
+	sm.add(window, 'posReward').listen();
+	sm.add(window, 'negReward').listen();
+	sm.add(agent, 'save');
+
+	cont.knob0 = cont.knob1 = cont.knob2 = cont.knob3 = cont.knob8 = -1;
+	sm.add(cont, 'knob0', 0, 127).listen();
+	sm.add(cont, 'knob1', 0, 127).listen();
+	sm.add(cont, 'knob2', 0, 127).listen();
+	sm.add(cont, 'knob3', 0, 127).listen();
+	sm.add(cont, 'knob8', 0, 127).listen();
+
+	var textEl = document.getElementById('text-field');
+	var textLastValue = '';
+
+
+	document.onkeyup = function (e) {
+		if (e.which === 18) { // alt
+			e.preventDefault();
+		}
+
+		if (e.getModifierState('NumLock')) {
+			document.querySelector('.alarm').style.display = 'none';
+		} else {
+			document.querySelector('.alarm').style.display = 'inline';
+		}
+	};
+
+	textEl.onkeyup = function (e) {
+		if (e.which === 32) { // space
+			this.value = '';
+		}
+		if (!e.target.value) return;
+		if (e.which === 13) { // enter
+			if (e.target.value === ' ') return e.target.value = '';
+			new Bullet(e.target.value);
+			textEl.value = '';
+		}
+	};
+
+	textEl.focus();
+	textEl.onblur = function () {
+		textEl.focus();
+	};
+
+	// game
+	scene = this;
 	this.matter.add.mouseSpring();
-	this.matter.add.image(config.width / 2, 750, 'platform', null, {
+	var platform = this.matter.add.image(config.width / 2, config.height - 50, 'platform', null, {
 		isStatic: true,
-	}),
+	});
+	platform.setCollisionCategory(2);
+	platform2 = this.matter.add.image(config.width / 2, config.height - 150, 'platform');
+	platform2.setCollisionCategory(2);
 
-	scene.anims.create({key: 'bark', frames: scene.anims.generateFrameNames('dog', {start: 0, end: 3}), frameRate: 10, repeat: -1});
-	scene.anims.create({key: 'walk', frames: scene.anims.generateFrameNames('dog', {start: 6, end: 11}), frameRate: 10, repeat: -1});
-	scene.anims.create({key: 'run', frames: scene.anims.generateFrameNames('dog', {start: 12, end: 16}), frameRate: 10, repeat: -1});
-	scene.anims.create({key: 'wag', frames: scene.anims.generateFrameNames('dog', {start: 18, end: 21}), frameRate: 10, repeat: -1});
-	scene.anims.create({key: 'sit', frames: scene.anims.generateFrameNames('dog', {start: 24, end: 26}), frameRate: 10});
+	this.anims.create({key: 'bark', frames: this.anims.generateFrameNames('dog', {start: 0, end: 3}), frameRate: 10, repeat: -1});
+	this.anims.create({key: 'walk', frames: this.anims.generateFrameNames('dog', {start: 6, end: 11}), frameRate: 10, repeat: -1});
+	this.anims.create({key: 'run', frames: this.anims.generateFrameNames('dog', {start: 12, end: 16}), frameRate: 10, repeat: -1});
+	this.anims.create({key: 'wag', frames: this.anims.generateFrameNames('dog', {start: 18, end: 21}), frameRate: 10, repeat: -1});
+	this.anims.create({key: 'sit', frames: this.anims.generateFrameNames('dog', {start: 24, end: 26}), frameRate: 10});
 
-	new Monster(1);
-}
-var drewText = '';
+	scoreText = this.add.text(32, 32, '0', {fontFamily: 'font', fontSize: '64px'});
 
-function Bullet(char) {
-	bullets.push(this);
-	this.age = 0;
-	this.text = scene.add.bitmapText(config.width / 2, config.height - 64, 'font', char, 64, 'center');
-	this.text.x -= this.text.width / 2;
-	this.tween = null;
+	new Monster();
 
-	// find something to move toward
-	this.target = null;
-	this.targetX;
-	this.targetY;
-	this.findTarget(char);
-}
-Bullet.prototype = {
-	findTarget: function (char) {
-		for (var i = 0; i < monsters.length; i += 1) {
-			var texts = monsters[i].texts.getChildren();
-			for (var j = texts.length - 1; j >= 0; j -= 1) {
-				for (var k = 0; k < texts[j].text.length; k += 1) {
-					if (texts[j].text[k] === char && texts[j].y > -80) {
-						this.target = monsters[i];
-						this.targetX = texts[j].x + 34 * k; // letter width
-						this.targetY = texts[j].y;
-						return;
-					}
-				}
-			}
-		}
-		return null;
-	},
-	destroy: function () {
-		this.text.destroy();
-		bullets.splice(bullets.indexOf(this), 1);
-	},
-	update: function () {
-		if (!this.target && this.age > 60) {
-			this.destroy();
-		} else if (this.target && !this.tween) {
-			this.tween = scene.tweens.add({
-				targets: [this.text],
-				x: this.targetX,
-				y: this.targetY,
-				duration: Phaser.Math.Distance.Between(this.text.x, this.text.y, this.targetX, this.targetY),
-				callbackScope: this,
-				onComplete: this.explode
-			});
-		}
-		this.age += 1;
-	},
-	explode: function () {
-		this.target.hit(this.text.text);
-		this.destroy();
+	gameSounds = {
+		shoot: this.sound.add('shoot'),
+		explode: this.sound.add('explode'),
+		explode2: this.sound.add('explode2')
+	};
+
+	// music
+	notes.push(this.sound.add('e4'));
+	notes.push(this.sound.add('f4'));
+	notes.push(this.sound.add('f#4'));
+	notes.push(this.sound.add('g4'));
+	notes.push(this.sound.add('g#4'));
+	notes.push(this.sound.add('a4'));
+	notes.push(this.sound.add('a#4'));
+	notes.push(this.sound.add('b4'));
+	notes.push(this.sound.add('c5'));
+	notes.push(this.sound.add('c#5'));
+	notes.push(this.sound.add('d5'));
+	notes.push(this.sound.add('d#5'));
+	notes.push(this.sound.add('e5'));
+
+	hat = this.sound.add('hat');
+	snare = this.sound.add('snare');
+	tom = this.sound.add('tom');
+
+	words = this.sound.add('words');
+	song = this.sound.add('song');
+
+	for (var i = 0; i < notes.length; i += 1) {
+		notes[i].addMarker({name: notes[i].key, start: 0, duration: 1});
 	}
-};
 
-function Monster(type) {
-	monsters.push(this);
-	this.texts = scene.add.group();
-	if (!type) type = Math.floor(Math.random() * 2);
-
-	// '\u263A\u00C4\u263B\u00C5\u2665\u00C9\u2666\u00E6\u2663\u00C6\u2660\u00F4\u2022\u00F6\u25D8\u00F2\u25CB\u00FB\u25D9\u00F9\u2642\u00FF\u2640\u00D6\u266A\u00DC\u266B\u00A2\u263C\u00A3\u25BA\u00A5\u25C4\u20A7\u2195\u0192\u203C\u00E1\u00B6\u00ED\u00A7\u00F3\u25AC\u00FA\u21A8\u00F1\u2191\u00D1\u2193\u00AA\u2192\u00BA\u2190\u00BF\u221F\u2310\u2194\u00AC\u25B2\u00BD\u25BC\u00BC\u00A1\u2302\u00AB\u00C7\u00BB\u00FC\u2591\u00E9\u2592\u00E2\u2593\u00E4\u2502\u00E0\u2524\u00E5\u2561\u00E7\u2562\u00EA\u2556\u00EB\u2555\u00E8\u2563\u00EF\u2551\u00EE\u2557\u00EC\u255D\u255C\u221E\u00D2\u255B\u03C6\u00D3\u2510\u03B5\u00D4\u2514\u2229\u00A4\u00D5\u2534\u2261\u252C\u00B1\u00A6\u00D7\u251C\u2265\u00D8\u2500\u2264\u00A8\u00D9\u253C\u2320\u00A9\u00DA\u255E\u2321\u00DB\u255F\u00F7\u255A\u2248\u00DD\u2554\u00B0\u00AE\u00DE\u2569\u2219\u00AF\u00DF\u2566\u00B7\u2560\u221A\u2550\u207F\u00B2\u256C\u00B3\u00E3\u2567\u25A0\u00B4\u2568\u00B5\u2564\u20AC\u2565\u201A\u2559\u00B8\u2558\u201E\u00B9\u2552\u2026\u2553\u2020\u256B\u2021\u256A\u02C6\u2518\u2030\u00BE\u250C\u0160\u2588\u2039\u00C0\u00F0\u2584\u0152\u00C1\u258C\u017D\u00C2\u2590\u2018\u00C3\u2580\u2019\u03B1\u201C\u00F5\u201D\u0393\u03C0\u2013\u00C8\u00F8\u03A3\u2014\u03C3\u02DC\u00CB\u2122\u00CC\u03C4\u0161\u00CD\u03A6\u203A\u00CE\u00FD\u0398\u0153\u00CF\u00FE\u03A9\u017E\u00D0\u03B4\u0178',
-
-	var chars = [
-		[
-			'\u263a\u263a\u263a\u263a\u263a',
-			'\u03A9\u03A9\u03A9\u03A9\u03A9\u03A9\u03A9\u03A9',
-			'\u2665\u2665\u2665\u2665\u2665',
-		],
-		[
-			'\u263A \u263A \u263A \u263A',
-			'\u263A \u263A \u263A \u263A \u263A',
-		]
-	];
-
-	for (var i = 0; i < chars[type].length; i += 1) {
-		var text = scene.add.bitmapText(config.width / 2, -64 * chars[type].length + 64 * i, 'font', chars[type][i], 64, 'center');
-		text.x -= text.width / 2;
-		text.ogx = text.x;
-		text.setDepth(-5);
-		this.texts.add(text);
-	}
+	loopNote = this.sound.add('loopNote');
+	loopNote.addMarker({
+		name: 'mark',
+		start: 0,
+		duration: 0.2,
+		config: {
+			loop: true
+		}
+	});
+	loopNote.on('looped', function (sound) {
+		step();
+	}, this);
+	loopNote.play('mark', {
+		delay: 0,
+		volume: 0
+	});
 }
-Monster.prototype = {
-	hit: function (char) {
-		if (!this.texts.children) return;
-		var texts = this.texts.getChildren();
-		for (var i = texts.length - 1; i >= 0; i -= 1) {
-			for (var j = 0; j < texts[i].text.length; j += 1) {
-				if (texts[i].y > -80 && texts[i].text[j] === char) {
-					texts[i].text = texts[i].text.slice(0, j) + ' ' + texts[i].text.slice(j + 1);
-					var shrapnel;
-					for (var k = 0; k < 5; k += 1) {
-						shrapnel = scene.matter.add.image(texts[i].x, texts[i].y, 'shrapnel');
-						shrapnel.angle = Math.random() * 360;
-						shrapnel.setBody({width: 10, height: 20});
-						shrapnel.setDisplayOrigin(5, 12);
-						shrapnel.setVelocity(Math.random() * 10);
-						shrapnel.setAngularVelocity(Math.random() * 10);
-						shrapnels.push(shrapnel);
-					}
-
-					if (!texts[i].text.trim()) {
-						this.texts.remove(texts[i]);
-					}
-					return true;
-				}
-			}
-		}
-		return false;
-	},
-	destroy: function () {
-		this.texts.destroy({destroyChildren: true});
-		monsters.splice(monsters.indexOf(this), 1);
-	},
-	update: function () {
-		var texts = this.texts.getChildren();
-		for (var i = 0; i < texts.length; i += 1) {
-			texts[i].x = texts[i].ogx + 10 * Math.sin(frame / (i + 5) / 2 / Math.PI);
-			texts[i].y += 0.2;
-		}
-
-		if (texts.length === 0 || texts[0].y > config.height - 50) {
-			new Monster();
-			this.destroy();
-			return;
-		}
-	}
-};
-
-function Animal() {
-	animals.push(this);
-	this.image = scene.matter.add.sprite(Math.random() * (config.width - 200) + 50, config.height - 50, 'dog', null, {});
-	this.image.setY(config.height - this.image.height);
-	this.image.setBody({height: 30, width: 40});
-	this.image.setDisplayOrigin(this.image.width / 2, 44);
-	this.image.setDepth(5);
-
-	this.changeFrequency = Math.round(Math.random() * 1300 + 100);
-
-	// scene.matter.world.on('collisionstart', function (e, a, b) {
-	// 	console.log(e, a, b);
-	// });
-}
-Animal.prototype = {
-	update: function () {
-		if (frame % this.changeFrequency === 0) {
-			this.animation = Math.floor(Math.random() * 5);
-			switch (this.animation) {
-				case 0: this.image.anims.play('bark'); break;
-				case 1: this.image.anims.play('walk'); break;
-				case 2: this.image.anims.play('run'); break;
-				case 3: this.image.anims.play('wag'); break;
-				case 4: this.image.anims.play('sit'); break;
-			}
-		}
-
-		if (frame % this.changeFrequency === 0 && Math.random() > 0.5) {
-			this.image.scaleX *= -1;
-		}
-		if (this.image.x < 150) {
-			this.image.scaleX = -1;
-		} else if (this.image.x > config.width - 150) {
-			this.image.scaleX = 1;
-		}
-
-		if (frame % 3 === 0 && this.image.anims.currentAnim && Math.abs(this.image.body.velocity.x) < 3) {
-			if (this.image.anims.currentAnim.key === 'walk') {
-				this.image.applyForce({x: this.image.scaleX > 0 ? -0.003 : 0.003, y: 0});
-			} else if (this.image.anims.currentAnim.key === 'run') {
-				this.image.applyForce({x: this.image.scaleX > 0 ? -0.006 : 0.006, y: 0});
-			}
-		}
-
-		this.image.setAngularVelocity(0);
-
-		if (this.image.y > config.height + 50) {
-			this.destroy();
-		}
-	},
-	destroy: function () {
-		this.image.destroy();
-		animals.splice(animals.indexOf(this), 1);
-	}
-};
 
 function update() {
 	if (animals.length < 2) {
 		new Animal();
+	}
+
+	if (cont.butt0) {
+		cont.animal = true;
+	} else {
+		if (cont.animal) {
+			cont.animal = false;
+			new Animal();
+		}
 	}
 
 	// update stuff
@@ -340,46 +419,168 @@ function update() {
 		}
 	}
 
+	platform2.setX(10 * cont.knob1 - 300);
+	platform2.setY(config.height - 150);
+	platform2.setAngularVelocity(0);
+	this.sound.rate = cont.knob2 === -1 ? 1 : cont.knob2 * 0.01171875 + 0.5;
+	this.sound.detune = cont.knob3 === -1 ? 0 : cont.knob3 * 18.75 - 1200;
+	this.sound.volume = cont.knob8 === -1 ? 1 : cont.knob8 / 128;
+
+	rand = Math.random();
+	this.tweens.setGlobalTimeScale(loopNote.totalRate);
 	frame += 1;
 }
 
-window.onload = function () {
-	var gui = new dat.GUI();
-	var sm = gui.addFolder('Computer Brains');
-	sm.open();
-	sm.add(agent, 'epsilon', 0, 1).listen();
-	sm.add(agent, 'alpha', 0, 0.02).listen();
-	sm.add(agent.exp, 'length', 0, 500000).listen();
-	sm.add(window, 'posReward').listen();
-	sm.add(window, 'totalReward').listen();
-	sm.add(agent, 'save');
+function step() {
+	if (eights % 8 === 0) {
+		now.chord = progression[measures];
+		now.scale = progressionScales[measures];
+		now.progressionPattern = progressionPatterns[measures];
+		now.drumPattern = drumPatterns[measures];
+		now.playMelody = playMelody[measures];
+	}
 
-	var textEl = document.getElementById('text-field');
-	var textLastValue = '';
+	now.action = agent.act(last.state)
 
-	// textEl.oninput = function (e) {
-	// 	if (textLastValue !== textEl.value) {
-	// 		text = textEl.value;
+	// get reward
+	var strong = eights % 4 === 0;
+	var modScale = scales[now.scale].map(note => {
+		var chord = chords[now.chord];
+		for (var i = 0; i < chord.length; i += 1) {
+			if (chord[i].slice(0, 1) === note.slice(0, 1)) {
+				return chord[i].slice(0, -1);
+			}
+		}
+		return note;
+	});
 
-	// 		textLastValue = textEl.value;
-	// 	}
-	// };
+	var inScale = modScale.indexOf(melody[now.action].slice(0, -1)) !== -1
+	var inChord = chords[now.chord].reduce((a, v) => {
+		return a ? a : melody[now.action].slice(0, -1) === v.slice(0, -1)
+	}, false);
+	var semitoneDiff = Math.abs(last.state[2] - now.action);
+	var differentFromLast2 = now.action !== last.state[2] && now.action !== last.state[1];
+	var sameDirection = (now.action - last.state[2] > 0 && last.state[2] - last.state[1] > 0) ||
+						(now.action - last.state[2] < 0 && last.state[2] - last.state[1] < 0);
 
-	textEl.onkeydown = function (e) {
-		if (!e.target.value) return;
+	// calculate reward based on new state
+	var reward = 0;
+	if (inChord && strong) {
+		reward = 2;
+	} else if (inScale && strong) {
+		reward = 1;
+	} else {
+		reward = 0;
+	}
 
-		if (e.which === 13) {
-			if (e.target.value === ' ') return;
-			new Bullet(e.target.value);
-			textEl.value = '';
+	if (inScale) {
+		if (semitoneDiff === 0) { // same note
+			reward = -1;
+		} else if ([6,10,11].indexOf(semitoneDiff) !== -1) { // TT m7 M7
+			reward = -1;
+		} else if ([1,2,3,4].indexOf(semitoneDiff) !== -1) { // m2 M2 m3 M3
+			reward += 1;
+		}
+
+		if (differentFromLast2) {
+			reward += 1;
+		}
+
+		if (sameDirection) {
+			reward += 1;
 		}
 	}
-};
+
+	if (reward > 0) {
+		posReward += reward;
+	} else {
+		negReward += reward;
+	}
+
+	agent.learn(reward);
+
+	if (!skipNext && skipNext3 >= 3 && now.playMelody) {
+		notes[now.action].play(notes[now.action].key, {
+			start: 0,
+			duration: 3,
+			delay: 0.04,
+			volume: 0.2,
+		});
+	} else {
+		skipNext = false;
+		skipNext3 += 1;
+	}
+	if (Math.random() < 0.9 && inChord && strong) {
+		skipNext = true;
+	}
+	if (Math.random() < 0.9 && inChord) {
+		skipNext3 = 0;
+	}
+
+	// strong
+	// note
+	// note
+	// chord
+	last.state = [1, last.action, now.action, now.chord];
+
+	// drums
+	var d = {delay: 0.08, volume: 0.5};
+	switch (now.drumPattern) {
+		case 0:
+			if ([0].indexOf(eights % 8) !== -1) { // tom
+				tom.play('', d);
+			}
+			if (eights % 8 === 4) { // snare
+				snare.play('', d);
+			}
+			if (eights % 2 === 0) { // hihat
+				hat.play('', d);
+			}
+		break;
+		case 1:
+			snare.play('', d);
+			tom.play('', d);
+			if (eights % 2 === 0) { // hihat
+				hat.play('', d);
+			}
+		break;
+		case 2:
+			if (eights % 8 === 0) {
+				snare.play('', d);
+				tom.play('', d);
+			}
+			if (eights % 4 === 0) { // hihat
+				hat.play('', {delay: 0.08, volume: 0.7});
+			}
+		break;
+		case 3:
+			if ([0, 4].indexOf(eights % 8) !== -1) { // hihat
+				hat.play('', {delay: 0.08, volume: 0.5});
+			}
+		break;
+	}
+
+	if (eights % 384 === 1) {
+		words.play({delay: 0.1});
+	} else if (eights % 384 === 192 - 2) {
+		song.play({delay: 0});
+	}
+
+	if (eights % 8 === 0) {
+		measures++;
+		if (measures > progression.length - 1) measures = 0;
+	}
+	eights++;
+}
 
 </script>
 </head>
 
 <body>
 	<input id="text-field" type="text" autocomplete="off" spellcheck="false" maxlength="1" />
+	<div class="alarm">
+		<img src="interactive-game-song/alarm.gif">
+		<h2>turn on NumLock!</h2>
+	</div>
 </body>
 </html>
