@@ -73,6 +73,7 @@ var reward = 0;
 var posReward = 0;
 var checkReward = 0;
 var totalReward = 0;
+var song;
 
 var game = new Phaser.Game(config);
 
@@ -81,6 +82,7 @@ function preload() {
 	this.load.image('head', 'ragdoll/head.png');
 	this.load.image('body', 'ragdoll/body.png');
 	this.load.image('leg', 'ragdoll/leg.png');
+	this.load.audio('song', 'ragdoll/20180628.mp3');
 }
 
 function create() {
@@ -132,6 +134,8 @@ function create() {
 	// });
 
 	ragdoll(250, 400, 1, {}, this);
+	song = this.sound.add('song');
+	song.play();
 }
 
 function update() {
